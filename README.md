@@ -1,3 +1,3 @@
-# Advent of Code Solutions 2022
+# Advent of Code Solutions
 
-[Advent of Code 2022](https://adventofcode.com/2022) solutions in various languages.
+[Advent of Code](https://adventofcode.com) solutions in various languages.

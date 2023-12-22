@@ -21,7 +21,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("input file %s ready to go!", input.Name())
+	fmt.Printf("input file %s ready to go!\n", input.Name())
 
 	/*
 		raw, err := io.ReadAll(input)

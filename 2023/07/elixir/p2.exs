@@ -1,5 +1,20 @@
 defmodule Solution do
-  @input_path "input.txt"
+  defmodule Hand do
+    defstruct [:cards, :bid, combo: nil]
+  end
+
+  @combos %{
+    nil => 0,
+    :high_card => 1,
+    :one_pair => 2,
+    :two_pair => 3,
+    :three_kind => 4,
+    :full_house => 5,
+    :four_kind => 6,
+    :five_kind => 7
+  }
+  @card_order ~c"J23456789TQKA"
+  @input_path "../input.txt"
   def read_input([]) do
     File.stream!(@input_path)
   end
@@ -7,43 +22,121 @@ defmodule Solution do
   def read_input(args) do
     case args do
       [path] -> File.stream!(path)
-      _ -> raise ArgumentError, "usage: p2.exs *input_path*"
+      _ -> raise ArgumentError, "usage: p1.exs *input_path*"
     end
   end
 
-  def find_min_cubes(set, acc) do
-    Enum.reduce(set, acc, fn {key, val}, acc ->
-      case Map.get(acc, key) do
-        old when old != nil ->
-          if val > old do
-            %{acc | key => val}
+  def find_combo(cards) do
+    freqs =
+      String.to_charlist(cards)
+      |> Enum.reject(fn c -> c == ?J end)
+      |> Enum.frequencies()
+      |> Enum.flat_map(fn {_k, v} -> [v] end)
+      |> Enum.frequencies()
+
+    jokers = Enum.count(String.to_charlist(cards), fn c -> c == ?J end)
+
+    # One way to determine the Joker card combo is
+    # to take the smallest combo possible without Joker cards
+    # and then promote it based on Joker card quantity
+    combo =
+      cond do
+        Map.get(freqs, 5, 0) > 0 ->
+          :five_kind
+
+        Map.get(freqs, 4, 0) > 0 ->
+          if jokers == 1 do
+            :five_kind
           else
-            acc
+            :four_kind
           end
 
-        nil ->
-          Map.put(acc, key, val)
+        Map.get(freqs, 3, 0) > 0 and Map.get(freqs, 2, 0) > 0 ->
+          :full_house
+
+        Map.get(freqs, 3, 0) > 0 ->
+          case jokers do
+            2 -> :five_kind
+            1 -> :four_kind
+            _ -> :three_kind
+          end
+
+        Map.get(freqs, 2, 0) == 2 ->
+          if jokers == 1 do
+            :full_house
+          else
+            :two_pair
+          end
+
+        Map.get(freqs, 2, 0) == 1 ->
+          case jokers do
+            3 -> :five_kind
+            2 -> :four_kind
+            1 -> :three_kind
+            _ -> :one_pair
+          end
+
+        # only triggers when jokers are not present
+        Map.get(freqs, 1, 0) == 5 ->
+          :high_card
+
+        true ->
+          case jokers do
+            x when x in [5, 4] -> :five_kind
+            3 -> :four_kind
+            2 -> :three_kind
+            1 -> :one_pair
+            _ -> nil
+          end
       end
-    end)
+
+    @combos[combo]
   end
 
-  # It actually does a lot more than parsing so a better name would be nice
-  def parse_game(game) do
-    [_ | sets] = String.trim(game) |> String.split(":")
+  # true is returned when first is <= second
+  def compare_hands(first, second) do
+    cond do
+      first.combo == 0 and second.combo != 0 ->
+        true
 
-    String.split(hd(sets), ";")
-    |> Enum.map(fn set ->
-      Regex.scan(~r/(\d*)\s(red|green|blue)/, set, capture: :all_but_first)
-      |> Enum.reduce(%{}, fn [num | color], acc ->
-        Map.put(acc, hd(color), String.to_integer(num))
-      end)
-    end)
-    |> Enum.reduce(%{}, fn set, acc -> find_min_cubes(set, acc) end)
-    |> Enum.reduce(1, fn {_key, val}, acc -> acc * val end)
+      first.combo != 0 and second.combo == 0 ->
+        false
+
+      first.combo != 0 and second.combo != 0 and first.combo < second.combo ->
+        true
+
+      first.combo != 0 and second.combo != 0 and first.combo > second.combo ->
+        false
+
+      # both combos equal
+      true ->
+        Enum.zip(String.to_charlist(first.cards), String.to_charlist(second.cards))
+        |> Enum.reduce_while(false, fn {a, b}, _acc ->
+          first_idx = Enum.find_index(@card_order, fn e -> e == a end)
+          second_idx = Enum.find_index(@card_order, fn e -> e == b end)
+
+          cond do
+            first_idx > second_idx -> {:halt, false}
+            first_idx < second_idx -> {:halt, true}
+            first_idx == second_idx -> {:cont, true}
+          end
+        end)
+    end
+  end
+
+  def parse_hand(line) do
+    [cards | [bid | _]] = String.split(line)
+
+    %Hand{cards: cards, bid: String.to_integer(bid), combo: find_combo(cards)}
   end
 
   def solve() do
-    read_input(System.argv()) |> Enum.map(&parse_game/1) |> Enum.reduce(&+/2) |> IO.inspect()
+    read_input(System.argv())
+    |> Enum.map(&parse_hand/1)
+    |> Enum.sort(&compare_hands/2)
+    |> Enum.with_index()
+    |> Enum.reduce(0, fn {hand, rank}, acc -> acc + hand.bid * (rank + 1) end)
+    |> IO.inspect(limit: :infinity)
   end
 end
 

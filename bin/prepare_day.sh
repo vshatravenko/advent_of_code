@@ -22,3 +22,4 @@ mkdir -p "${dest}"
 cp -R "${src}" "${dest}"
 
 echo "${dest}/${1} is ready!"
+cd "${dest}/${1}"
